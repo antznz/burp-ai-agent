@@ -198,7 +198,7 @@ class OpenAiCompatibleBackend(
                             "model" to model,
                             "messages" to messages,
                             "stream" to streaming,
-                            "temperature" to if (determinismMode) 0.0 else 0.7,
+                            "temperature" to if (determinismMode) 0.0 else 0.2,
                         )
                     payloadCustomizer?.invoke(payload)
                     if (maxOutputTokens != null) {

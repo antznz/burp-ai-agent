@@ -870,7 +870,7 @@ class ChatPanel(
                         // approval card's ActionListener, which the AWT event pump dispatches on this
                         // same EDT by definition. So the thread choice documented just below is
                         // unchanged and the REL-05 work stays Phase 23's.
-                        if (allowToolCalls && state.toolsMode && toolContext != null) {
+                        if (allowToolCalls && state.toolsMode && toolContext != null && toolPreamble != null) {
                             SwingUtilities.invokeLater {
                                 // Map reads and panel.addMessage now run on the EDT (confinement fix).
                                 val outcome =
@@ -2792,6 +2792,11 @@ class ChatPanel(
         val call = if (remainingToolIterations > 0) ToolCallParser.extractFirst(responseText) else null
         val panel = sessionPanels[sessionId]
         if (call == null || panel == null) return ToolCallOutcome.NOT_CHAINED
+        val canonicalId = McpToolExecutor.canonicalToolId(call.tool)
+        val enabledCatalog = McpToolExecutor.describeTools(context, includeSchemas = false, includeDisabled = false)
+        if (enabledCatalog.lineSequence().none { it.startsWith("- ${canonicalId}:") }) {
+            return ToolCallOutcome.NOT_CHAINED
+        }
         val state = sessionStates.getOrPut(sessionId) { ToolSessionState() }
         // SEC-06 / T-22-01 — THE trust boundary this whole phase exists to install. Model context is
         // attacker-influenceable (proxy traffic sent via "Send to AI", passive-scan findings, external
@@ -3580,6 +3585,8 @@ class ChatPanel(
         includeCatalog: Boolean,
     ): String? {
         if (context == null) return null
+        val enabledCatalog = McpToolExecutor.describeTools(context, includeSchemas = true, includeDisabled = false)
+        if (enabledCatalog.lineSequence().none { it.startsWith("- ") }) return null
         val header =
             """
 You have access to MCP tools via a text-based protocol. To call a tool, output ONLY a JSON code block in this exact format:
@@ -3594,11 +3601,11 @@ IMPORTANT:
 - When making a tool call, output ONLY the JSON block and nothing else in that message.
 - Do NOT say you cannot use tools. You CAN use them by outputting JSON as shown above.
 - After receiving a tool result, continue your analysis or make another tool call.
-- For confirmed vulnerabilities, call `issue_create` with concrete evidence.
+
         """.trim()
         // Two returns, not three: detekt's ReturnCount baseline entry names this function's old signature.
         return if (includeCatalog) {
-            header + "\n\n" + McpToolExecutor.describeTools(context, includeSchemas = true, includeDisabled = false)
+            header + "\n\n" + enabledCatalog
         } else {
             header
         }
